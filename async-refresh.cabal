@@ -1,0 +1,38 @@
+name:                async-refresh
+version:             0.1.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/mtesseract/async-refresh
+license:             BSD3
+license-file:        LICENSE
+author:              Moritz Schulte
+maintainer:          mtesseract@silverratio.net
+copyright:           (c) 2017 Moritz Schulte
+category:            Data
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Control.Concurrent.Async.Refresh
+  build-depends:       base >= 4.7 && < 5
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fno-warn-type-defaults
+  other-extensions:    NoImplicitPrelude
+                     , OverloadedStrings
+                     , UnicodeSyntax
+                     , RecordWildCards
+                     , FlexibleContexts
+                     , MultiParamTypeClasses
+  build-depends:       base >= 4.7 && < 5
+                     , classy-prelude
+                     , containers
+                     , monad-logger
+                     , lifted-async
+                     , stm
+                     , async-timer
+
+source-repository head
+  type:     git
+  location: https://github.com/mtesseract/async-refresh
