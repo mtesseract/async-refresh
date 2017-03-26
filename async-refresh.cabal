@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.1.0
+version:             0.1.1
 -- synopsis:
 -- description:
 homepage:            https://github.com/mtesseract/async-refresh
@@ -21,7 +21,6 @@ library
   ghc-options:         -Wall -fno-warn-type-defaults
   other-extensions:    NoImplicitPrelude
                      , OverloadedStrings
-                     , UnicodeSyntax
                      , RecordWildCards
                      , FlexibleContexts
                      , MultiParamTypeClasses
