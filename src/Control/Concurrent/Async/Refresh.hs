@@ -22,8 +22,8 @@ module Control.Concurrent.Async.Refresh
 import           ClassyPrelude
 import           Control.Concurrent.Async.Timer
 import           Control.Monad.Logger
-import           Data.Function                       ((&))
-import qualified Data.Map                            as Map
+import           Data.Function                  ((&))
+import qualified Data.Map                       as Map
 
 data AsyncRefreshConf k a b =
   AsyncRefreshConf { asyncRefreshInterval   :: Int -- Seconds
@@ -41,8 +41,9 @@ data AsyncRefresh k a =
                , asyncRefreshInfoMapTVar :: TVar (Map k (AsyncRefreshInfo a))
                , asyncRefreshAsync       :: Async () }
 
-asyncRefreshLastRun ∷ AsyncRefresh k a
-                    → IO UTCTime
+asyncRefreshLastRun ∷ MonadIO m
+                    => AsyncRefresh k a
+                    → m UTCTime
 asyncRefreshLastRun = atomically . readTVar . asyncRefreshLastRunTVar
 
 -- | Default refresh interval in seconds.
@@ -70,10 +71,11 @@ asyncRefreshConfAddRequest ∷ k
 asyncRefreshConfAddRequest k aStore conf@AsyncRefreshConf { .. } =
   conf { asyncRefreshRequests = (k, aStore) : asyncRefreshRequests }
 
-asyncRefreshInfo ∷ Ord k
+asyncRefreshInfo ∷ ( MonadIO m
+                   , Ord k )
                  ⇒ AsyncRefresh k a
                  → k
-                 → IO (Maybe (AsyncRefreshInfo a))
+                 → m (Maybe (AsyncRefreshInfo a))
 asyncRefreshInfo asyncRefresh k = atomically $
   Map.lookup k <$> readTVar (asyncRefreshInfoMapTVar asyncRefresh)
 
