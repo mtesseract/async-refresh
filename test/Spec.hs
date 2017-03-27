@@ -19,19 +19,19 @@ tests :: [Test.Framework.Test]
 tests =
   [ testGroup "Test Suite" [ testCase "Simple one-time refreshing" oneTimeRefresh ] ]
 
-newtype TokenName = TokenName Text deriving (Eq, Ord)
+newtype TokenName = TokenName Text deriving (Show, Eq, Ord)
 newtype Token = Token ByteString deriving (Show, Eq)
 
-refresherInit :: IO ByteString
+refresherInit :: MonadIO m => m ByteString
 refresherInit = return "init"
 
-refresher :: ByteString -> TokenName -> IO (RefreshResult Token)
+refresher :: MonadIO m => ByteString -> TokenName -> m (RefreshResult Token)
 refresher time (TokenName name) =
   return $ RefreshResult
   { refreshResult = Token (encodeUtf8 ((decodeUtf8 time) ++ "-" ++ name))
   , refreshTryNext = Just (60 * 10^3) }
 
-mkConf :: TVar (Maybe Token) -> AsyncRefreshConf TokenName Token ByteString
+mkConf :: MonadIO m => TVar (Maybe Token) -> AsyncRefreshConf m TokenName Token ByteString
 mkConf tokenStore =
   newAsyncRefreshConf refresherInit refresher
     & asyncRefreshConfSetInterval 1 -- Once per second

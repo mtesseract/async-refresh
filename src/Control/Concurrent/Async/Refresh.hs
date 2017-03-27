@@ -20,21 +20,24 @@ module Control.Concurrent.Async.Refresh
 
 import           ClassyPrelude
 import           Control.Concurrent.Async.Lifted.Safe (waitAny)
--- import           Control.Exception.Safe
 import           Control.Monad.Logger
--- import           Data.Function                        ((&))
+import           Control.Retry
+import           Data.Either                          (isLeft)
 import qualified Data.Map                             as Map
+import           Formatting                           hiding (now)
 
 data AsyncRefreshRequest k a =
   AsyncRefreshRequest { asyncRefreshRequestKey   :: k
                       , asyncRefreshRequestStore :: TVar (Maybe a)
                       }
 
-data AsyncRefreshConf k a b =
+data AsyncRefreshConf m k a b =
   AsyncRefreshConf { asyncRefreshDefaultInterval :: Int -- Milliseconds
-                   , asyncRefreshActionInit      :: IO b
-                   , asyncRefreshAction          :: b -> k -> IO (RefreshResult a)
-                   , asyncRefreshRequests        :: [ AsyncRefreshRequest k a ] }
+                   , asyncRefreshActionInit      :: m b
+                   , asyncRefreshAction          :: b -> k -> m (RefreshResult a)
+                   , asyncRefreshRequests        :: [ AsyncRefreshRequest k a ]
+                   , asyncRefreshRetryPolicy     :: RetryPolicyM m
+                   }
 
 data AsyncRefreshInfo a =
   AsyncRefreshInfo { asyncRefreshInfoAge    :: Maybe UTCTime
@@ -54,25 +57,28 @@ data RefreshResult a =
 defaultAsyncRefreshInterval :: Int
 defaultAsyncRefreshInterval = 60 * 10^3
 
-newAsyncRefreshConf :: IO b
-                    -> (b -> k -> IO (RefreshResult a))
-                    -> AsyncRefreshConf k a b
+newAsyncRefreshConf :: MonadIO m
+                    => m b
+                    -> (b -> k -> m (RefreshResult a))
+                    -> AsyncRefreshConf m k a b
 newAsyncRefreshConf actionInit action =
   AsyncRefreshConf { asyncRefreshDefaultInterval = defaultAsyncRefreshInterval
                    , asyncRefreshActionInit      = actionInit
                    , asyncRefreshAction          = action
-                   , asyncRefreshRequests        = [] }
+                   , asyncRefreshRequests        = []
+                   , asyncRefreshRetryPolicy     = fullJitterBackoff 100 -- FIXME?
+                   }
 
 asyncRefreshConfSetInterval :: Int
-                            -> AsyncRefreshConf k a b
-                            -> AsyncRefreshConf k a b
+                            -> AsyncRefreshConf m k a b
+                            -> AsyncRefreshConf m k a b
 asyncRefreshConfSetInterval n conf =
   conf { asyncRefreshDefaultInterval = n }
 
 asyncRefreshConfAddRequest :: k
                            -> TVar (Maybe a)
-                           -> AsyncRefreshConf k a b
-                           -> AsyncRefreshConf k a b
+                           -> AsyncRefreshConf m k a b
+                           -> AsyncRefreshConf m k a b
 asyncRefreshConfAddRequest k aStore conf@AsyncRefreshConf { .. } =
   let request = AsyncRefreshRequest { asyncRefreshRequestKey   = k
                                     , asyncRefreshRequestStore = aStore }
@@ -94,8 +100,9 @@ newAsyncRefresh :: ( MonadIO m
                    , MonadMask m
                    , MonadLogger m
                    , Forall (Pure m)
+                   , Show k
                    , Ord k )
-                => AsyncRefreshConf k a b
+                => AsyncRefreshConf m k a b
                 -> m (AsyncRefresh k a)
 newAsyncRefresh conf = do
   infoMapTVar  <- liftIO $ newTVarIO Map.empty
@@ -111,8 +118,9 @@ asyncRefreshCtrlThread :: ( MonadIO m
                           , MonadMask m
                           , MonadLogger m
                           , Forall (Pure m)
+                          , Show k
                           , Ord k )
-                       => AsyncRefreshConf k a b
+                       => AsyncRefreshConf m k a b
                        -> TVar (Map k (AsyncRefreshInfo a))
                        -> m ()
 asyncRefreshCtrlThread conf@AsyncRefreshConf { .. } infoMapTVar = do
@@ -127,8 +135,9 @@ asyncRefreshThread :: ( MonadIO m
                       , MonadCatch m
                       , MonadLogger m
                       , Forall (Pure m)
+                      , Show k
                       , Ord k )
-                   => AsyncRefreshConf k a b
+                   => AsyncRefreshConf m k a b
                    -> TVar (Map k (AsyncRefreshInfo a))
                    -> AsyncRefreshRequest k a
                    -> m ()
@@ -136,9 +145,13 @@ asyncRefreshThread AsyncRefreshConf { .. } infoMapTVar request = forever $ do
   let k = asyncRefreshRequestKey request
   now <- liftIO getCurrentTime `logOnError` "Failed to retrieve currrent time"
   tryAny $ do
-    b <- liftIO asyncRefreshActionInit `logOnError` "Failed to execute init action"
-    tryResult <- tryAny $
-      liftIO (asyncRefreshAction b k) `logOnError` "Failed to execute refresh action"
+    b <- asyncRefreshActionInit `logOnError` "Failed to execute init action"
+
+    tryResult <- retrying asyncRefreshRetryPolicy (\_ -> return . isLeft) $ \_ -> do
+      let failureMsg =
+            sformat ("Failed to execute refresh action for token request '" % stext % "'")
+                    (tshow k)
+      tryAny $ asyncRefreshAction b k `logOnError` failureMsg
     let thisAge  = either (\_ -> Nothing) (\_ -> Just now) tryResult
         thisInfo = AsyncRefreshInfo
                    { asyncRefreshInfoAge    = thisAge
@@ -154,12 +167,14 @@ asyncRefreshThread AsyncRefreshConf { .. } infoMapTVar request = forever $ do
     case tryResult of
       Right res -> do
         let delay = fromMaybe asyncRefreshDefaultInterval (refreshTryNext res)
-        logDebugN "Refreshing done"
+        logDebugN $ sformat ("Refreshing done for token request '" % stext % "'") (tshow k)
         threadDelay (delay * 10^3)
       Left  exn -> do
-        let delay = asyncRefreshDefaultInterval -- FIXME
-        logErrorN $ "Error, need to retry: " ++ tshow exn
-        threadDelay delay
+        let delay = asyncRefreshDefaultInterval
+        logErrorN $
+          sformat ("Refresh action failed for token request '" % stext % "': " % stext)
+                  (tshow k) (tshow exn)
+        threadDelay (delay * 10^3)
 
 -- | Helper function, which evaluates the given action, logging an
 -- error in case of exceptions (and rethrowing the exception).
@@ -168,5 +183,5 @@ logOnError :: ( MonadIO m
               , MonadLogger m )
            => m a -> Text -> m a
 logOnError ma msg =
-  let exnFormatter exn = msg ++ ": " ++ tshow exn
+  let exnFormatter exn = sformat (stext % ": " % stext) msg (tshow exn)
   in ma `catchAny` (\e -> logErrorN (exnFormatter e) >> throwIO e)

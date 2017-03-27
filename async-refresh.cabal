@@ -31,6 +31,8 @@ library
                      , lifted-async
                      , stm
                      , safe-exceptions
+                     , retry
+                     , formatting
 
 test-suite async-refresh-test
   type:                exitcode-stdio-1.0
