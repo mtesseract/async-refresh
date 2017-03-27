@@ -30,7 +30,7 @@ library
                      , monad-logger
                      , lifted-async
                      , stm
-                     , async-timer
+                     , safe-exceptions
 
 test-suite async-refresh-test
   type:                exitcode-stdio-1.0

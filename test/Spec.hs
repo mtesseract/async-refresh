@@ -25,9 +25,11 @@ newtype Token = Token ByteString deriving (Show, Eq)
 refresherInit :: IO ByteString
 refresherInit = return "init"
 
-refresher :: ByteString -> TokenName -> IO Token
+refresher :: ByteString -> TokenName -> IO (RefreshResult Token)
 refresher time (TokenName name) =
-  return $ Token (encodeUtf8 ((decodeUtf8 time) ++ "-" ++ name))
+  return $ RefreshResult
+  { refreshResult = Token (encodeUtf8 ((decodeUtf8 time) ++ "-" ++ name))
+  , refreshTryNext = Just (60 * 10^3) }
 
 mkConf :: TVar (Maybe Token) -> AsyncRefreshConf TokenName Token ByteString
 mkConf tokenStore =
@@ -43,9 +45,7 @@ oneTimeRefresh = runStderrLoggingT $ do
   threadDelay (10 ^ 6 + 10 ^ 5)
   token <- atomically $ readTVar tokenStore
   liftIO $ token @?= Just (Token "init-dummy")
-  timestamp <- asyncRefreshLastRun asyncRefresh
   (Just info) <- asyncRefreshInfo asyncRefresh (TokenName "dummy")
   (Right res) <- return $ asyncRefreshInfoResult info
   liftIO $ res @?= Token "init-dummy"
-  liftIO $ asyncRefreshInfoAge info @?= Just timestamp
   return ()
