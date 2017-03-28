@@ -12,6 +12,7 @@ module Control.Concurrent.Async.Refresh
   , defaultAsyncRefreshInterval
   , newAsyncRefreshConf
   , asyncRefreshConfSetInterval
+  , asyncRefreshConfSetFactor
   , asyncRefreshConfAddRequest
   , newAsyncRefresh
   , asyncRefreshAsync
@@ -19,12 +20,13 @@ module Control.Concurrent.Async.Refresh
   ) where
 
 import           ClassyPrelude
-import           Control.Concurrent.Async.Lifted.Safe (waitAny)
+import           Control.Concurrent.Async.Lifted.Safe  (waitAny)
+import           Control.Concurrent.Async.Refresh.Util
 import           Control.Monad.Logger
 import           Control.Retry
-import           Data.Either                          (isLeft)
-import qualified Data.Map                             as Map
-import           Formatting                           hiding (now)
+import           Data.Either                           (isLeft)
+import qualified Data.Map                              as Map
+import           Formatting                            hiding (now)
 
 data AsyncRefreshRequest k a =
   AsyncRefreshRequest { asyncRefreshRequestKey   :: k
@@ -37,6 +39,7 @@ data AsyncRefreshConf m k a b =
                    , asyncRefreshAction          :: b -> k -> m (RefreshResult a)
                    , asyncRefreshRequests        :: [ AsyncRefreshRequest k a ]
                    , asyncRefreshRetryPolicy     :: RetryPolicyM m
+                   , asyncRefreshFactor          :: Double
                    }
 
 data AsyncRefreshInfo a =
@@ -67,13 +70,29 @@ newAsyncRefreshConf actionInit action =
                    , asyncRefreshAction          = action
                    , asyncRefreshRequests        = []
                    , asyncRefreshRetryPolicy     = fullJitterBackoff 100 -- FIXME?
+                   , asyncRefreshFactor          = defaultAsyncRefreshFactor
                    }
+
+defaultAsyncRefreshFactor :: Double
+defaultAsyncRefreshFactor = 0.8
 
 asyncRefreshConfSetInterval :: Int
                             -> AsyncRefreshConf m k a b
                             -> AsyncRefreshConf m k a b
 asyncRefreshConfSetInterval n conf =
   conf { asyncRefreshDefaultInterval = n }
+
+asyncRefreshConfSetFactor :: Double
+                          -> AsyncRefreshConf m k a b
+                          -> AsyncRefreshConf m k a b
+asyncRefreshConfSetFactor factor conf =
+  conf { asyncRefreshFactor = restrictToInterval 0 1 factor }
+
+restrictToInterval :: Double -> Double -> Double -> Double
+restrictToInterval lowerBound upperBound x
+  | x < lowerBound = lowerBound
+  | x > upperBound = upperBound
+  | otherwise      = x
 
 asyncRefreshConfAddRequest :: k
                            -> TVar (Maybe a)
@@ -141,7 +160,7 @@ asyncRefreshThread :: ( MonadIO m
                    -> TVar (Map k (AsyncRefreshInfo a))
                    -> AsyncRefreshRequest k a
                    -> m ()
-asyncRefreshThread AsyncRefreshConf { .. } infoMapTVar request = forever $ do
+asyncRefreshThread conf@AsyncRefreshConf { .. } infoMapTVar request = forever $ do
   let k = asyncRefreshRequestKey request
   now <- liftIO getCurrentTime `logOnError` "Failed to retrieve currrent time"
   tryAny $ do
@@ -168,7 +187,7 @@ asyncRefreshThread AsyncRefreshConf { .. } infoMapTVar request = forever $ do
       Right res -> do
         let delay = fromMaybe asyncRefreshDefaultInterval (refreshTryNext res)
         logDebugN $ sformat ("Refreshing done for token request '" % stext % "'") (tshow k)
-        threadDelay (delay * 10^3)
+        threadDelay (computeRefreshTime conf delay * 10^3)
       Left  exn -> do
         let delay = asyncRefreshDefaultInterval
         logErrorN $
@@ -176,12 +195,6 @@ asyncRefreshThread AsyncRefreshConf { .. } infoMapTVar request = forever $ do
                   (tshow k) (tshow exn)
         threadDelay (delay * 10^3)
 
--- | Helper function, which evaluates the given action, logging an
--- error in case of exceptions (and rethrowing the exception).
-logOnError :: ( MonadIO m
-              , MonadCatch m
-              , MonadLogger m )
-           => m a -> Text -> m a
-logOnError ma msg =
-  let exnFormatter exn = sformat (stext % ": " % stext) msg (tshow exn)
-  in ma `catchAny` (\e -> logErrorN (exnFormatter e) >> throwIO e)
+computeRefreshTime :: AsyncRefreshConf m k a b -> Int -> Int
+computeRefreshTime conf duration =
+  floor $ (asyncRefreshFactor conf) * fromIntegral duration

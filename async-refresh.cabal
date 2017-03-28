@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.1.1
+version:             0.1.2
 -- synopsis:
 -- description:
 homepage:            https://github.com/mtesseract/async-refresh
@@ -16,6 +16,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Control.Concurrent.Async.Refresh
+  other-modules:       Control.Concurrent.Async.Refresh.Util
   build-depends:       base >= 4.7 && < 5
   default-language:    Haskell2010
   ghc-options:         -Wall -fno-warn-type-defaults
