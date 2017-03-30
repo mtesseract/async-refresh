@@ -1,13 +1,16 @@
 {-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TupleSections         #-}
 
 module Control.Concurrent.Async.Refresh
   ( AsyncRefreshConf
   , AsyncRefreshInfo(..)
   , AsyncRefresh
+  , AsyncRefreshCallback
   , RefreshResult(..)
   , defaultAsyncRefreshInterval
   , newAsyncRefreshConf
@@ -20,41 +23,14 @@ module Control.Concurrent.Async.Refresh
   ) where
 
 import           ClassyPrelude
-import           Control.Concurrent.Async.Lifted.Safe  (waitAny)
+import           Control.Concurrent.Async.Lifted.Safe   (waitAny)
+import           Control.Concurrent.Async.Refresh.Types
 import           Control.Concurrent.Async.Refresh.Util
 import           Control.Monad.Logger
 import           Control.Retry
-import           Data.Either                           (isLeft)
-import qualified Data.Map                              as Map
-import           Formatting                            hiding (now)
-
-data AsyncRefreshRequest k a =
-  AsyncRefreshRequest { asyncRefreshRequestKey   :: k
-                      , asyncRefreshRequestStore :: TVar (Maybe a)
-                      }
-
-data AsyncRefreshConf m k a b =
-  AsyncRefreshConf { asyncRefreshDefaultInterval :: Int -- Milliseconds
-                   , asyncRefreshActionInit      :: m b
-                   , asyncRefreshAction          :: b -> k -> m (RefreshResult a)
-                   , asyncRefreshRequests        :: [ AsyncRefreshRequest k a ]
-                   , asyncRefreshRetryPolicy     :: RetryPolicyM m
-                   , asyncRefreshFactor          :: Double
-                   }
-
-data AsyncRefreshInfo a =
-  AsyncRefreshInfo { asyncRefreshInfoAge    :: Maybe UTCTime
-                   , asyncRefreshInfoResult :: Either SomeException a
-                   } deriving (Show)
-
-data AsyncRefresh k a =
-  AsyncRefresh { asyncRefreshInfoMapTVar :: TVar (Map k (AsyncRefreshInfo a))
-               , asyncRefreshAsync       :: Async () }
-
-data RefreshResult a =
-  RefreshResult { refreshResult  :: a
-                , refreshTryNext :: Maybe Int -- Milliseconds
-                } deriving (Show)
+import           Data.Either                            (isLeft)
+import qualified Data.Map                               as Map
+import           Formatting                             hiding (now)
 
 -- | Default refresh interval in Milliseconds.
 defaultAsyncRefreshInterval :: Int
@@ -62,8 +38,8 @@ defaultAsyncRefreshInterval = 60 * 10^3
 
 newAsyncRefreshConf :: MonadIO m
                     => m b
-                    -> (b -> k -> m (RefreshResult a))
-                    -> AsyncRefreshConf m k a b
+                    -> (b -> s -> m (RefreshResult a))
+                    -> AsyncRefreshConf m k s a b
 newAsyncRefreshConf actionInit action =
   AsyncRefreshConf { asyncRefreshDefaultInterval = defaultAsyncRefreshInterval
                    , asyncRefreshActionInit      = actionInit
@@ -77,14 +53,14 @@ defaultAsyncRefreshFactor :: Double
 defaultAsyncRefreshFactor = 0.8
 
 asyncRefreshConfSetInterval :: Int
-                            -> AsyncRefreshConf m k a b
-                            -> AsyncRefreshConf m k a b
+                            -> AsyncRefreshConf m k s a b
+                            -> AsyncRefreshConf m k s a b
 asyncRefreshConfSetInterval n conf =
   conf { asyncRefreshDefaultInterval = n }
 
 asyncRefreshConfSetFactor :: Double
-                          -> AsyncRefreshConf m k a b
-                          -> AsyncRefreshConf m k a b
+                          -> AsyncRefreshConf m k s a b
+                          -> AsyncRefreshConf m k s a b
 asyncRefreshConfSetFactor factor conf =
   conf { asyncRefreshFactor = restrictToInterval 0 1 factor }
 
@@ -94,13 +70,20 @@ restrictToInterval lowerBound upperBound x
   | x > upperBound = upperBound
   | otherwise      = x
 
-asyncRefreshConfAddRequest :: k
-                           -> TVar (Maybe a)
-                           -> AsyncRefreshConf m k a b
-                           -> AsyncRefreshConf m k a b
-asyncRefreshConfAddRequest k aStore conf@AsyncRefreshConf { .. } =
-  let request = AsyncRefreshRequest { asyncRefreshRequestKey   = k
-                                    , asyncRefreshRequestStore = aStore }
+emptyCallback :: Monad m => AsyncRefreshCallback m s a
+emptyCallback _ _ = return ()
+
+asyncRefreshConfAddRequest :: MonadIO m
+                           => k
+                           -> s
+                           -> Maybe (AsyncRefreshCallback m s a)
+                           -> AsyncRefreshConf m k s a b
+                           -> AsyncRefreshConf m k s a b
+asyncRefreshConfAddRequest k s maybeCallback conf@AsyncRefreshConf { .. } =
+  let callback = fromMaybe emptyCallback maybeCallback
+      request  = AsyncRefreshRequest { asyncRefreshRequestKey      = k
+                                     , asyncRefreshRequestSpec     = s
+                                     , asyncRefreshRequestCallback = callback }
   in conf { asyncRefreshRequests = request : asyncRefreshRequests }
 
 asyncRefreshInfo :: ( MonadIO m
@@ -121,7 +104,7 @@ newAsyncRefresh :: ( MonadIO m
                    , Forall (Pure m)
                    , Show k
                    , Ord k )
-                => AsyncRefreshConf m k a b
+                => AsyncRefreshConf m k s a b
                 -> m (AsyncRefresh k a)
 newAsyncRefresh conf = do
   infoMapTVar  <- liftIO $ newTVarIO Map.empty
@@ -139,7 +122,7 @@ asyncRefreshCtrlThread :: ( MonadIO m
                           , Forall (Pure m)
                           , Show k
                           , Ord k )
-                       => AsyncRefreshConf m k a b
+                       => AsyncRefreshConf m k s a b
                        -> TVar (Map k (AsyncRefreshInfo a))
                        -> m ()
 asyncRefreshCtrlThread conf@AsyncRefreshConf { .. } infoMapTVar = do
@@ -148,7 +131,6 @@ asyncRefreshCtrlThread conf@AsyncRefreshConf { .. } infoMapTVar = do
     void $ waitAny asyncHandles
     logErrorN "Unexpected termination"
 
-
 asyncRefreshThread :: ( MonadIO m
                       , MonadBaseControl IO m
                       , MonadCatch m
@@ -156,45 +138,55 @@ asyncRefreshThread :: ( MonadIO m
                       , Forall (Pure m)
                       , Show k
                       , Ord k )
-                   => AsyncRefreshConf m k a b
+                   => AsyncRefreshConf m k s a b
                    -> TVar (Map k (AsyncRefreshInfo a))
-                   -> AsyncRefreshRequest k a
+                   -> AsyncRefreshRequest m k s a
                    -> m ()
 asyncRefreshThread conf@AsyncRefreshConf { .. } infoMapTVar request = forever $ do
-  let k = asyncRefreshRequestKey request
-  now <- liftIO getCurrentTime `logOnError` "Failed to retrieve currrent time"
-  tryAny $ do
-    b <- asyncRefreshActionInit `logOnError` "Failed to execute init action"
+  let key = asyncRefreshRequestKey request
+  tryAny asyncRefreshThreadDo >>= \case
+    Right res -> do
+      let delay = fromMaybe asyncRefreshDefaultInterval (refreshTryNext res)
+      logDebugN $ sformat ("Refreshing done for token request '" % stext % "'")
+                          (tshow key)
+      threadDelay (computeRefreshTime conf delay * 10^3)
+    Left  exn -> do
+      let delay = asyncRefreshDefaultInterval
+      logErrorN $
+        sformat ("Refresh action failed for token request '" % stext % "': " % stext)
+                (tshow (asyncRefreshRequestKey request)) (tshow exn)
+      threadDelay (delay * 10^3)
 
-    tryResult <- retrying asyncRefreshRetryPolicy (\_ -> return . isLeft) $ \_ -> do
-      let failureMsg =
-            sformat ("Failed to execute refresh action for token request '" % stext % "'")
-                    (tshow k)
-      tryAny $ asyncRefreshAction b k `logOnError` failureMsg
-    let thisAge  = either (\_ -> Nothing) (\_ -> Just now) tryResult
-        thisInfo = AsyncRefreshInfo
-                   { asyncRefreshInfoAge    = thisAge
-                   , asyncRefreshInfoResult = either Left (Right . refreshResult) tryResult }
-        combine newInfo oldInfo =
-          newInfo { asyncRefreshInfoAge = asyncRefreshInfoAge newInfo
-                                          <|> asyncRefreshInfoAge oldInfo }
-    atomically $ do
-      let aStore = (asyncRefreshRequestStore request)
-      forM_ tryResult (writeTVar aStore . Just . refreshResult)
-      modifyTVar infoMapTVar (Map.insertWith combine k thisInfo)
+  where asyncRefreshThreadDo = do
+          let key  = asyncRefreshRequestKey  request
+              spec = asyncRefreshRequestSpec request
+          now <- liftIO getCurrentTime `logOnError` "Failed to retrieve currrent time"
+          b <- asyncRefreshActionInit `logOnError` "Failed to execute init action"
+          tryA <- retrying asyncRefreshRetryPolicy (\_ -> return . isLeft) $ \_ -> do
+            let failureMsg =
+                  sformat ("Failed to execute refresh action for token request '" % stext % "'")
+                          (tshow key)
+            tryAny $ asyncRefreshAction b spec `logOnError` failureMsg
 
-    case tryResult of
-      Right res -> do
-        let delay = fromMaybe asyncRefreshDefaultInterval (refreshTryNext res)
-        logDebugN $ sformat ("Refreshing done for token request '" % stext % "'") (tshow k)
-        threadDelay (computeRefreshTime conf delay * 10^3)
-      Left  exn -> do
-        let delay = asyncRefreshDefaultInterval
-        logErrorN $
-          sformat ("Refresh action failed for token request '" % stext % "': " % stext)
-                  (tshow k) (tshow exn)
-        threadDelay (delay * 10^3)
+          -- -- Evaluate user callback.
+          void $ tryAny (asyncRefreshRequestCallback request spec tryA)
+            `logOnError` "User provided callback threw exception"
 
-computeRefreshTime :: AsyncRefreshConf m k a b -> Int -> Int
+          -- -- -- Update map.
+          let thisAge      = either (const Nothing) (const (Just now)) tryA
+              thisInfo     = AsyncRefreshInfo
+                             { asyncRefreshInfoAge    = thisAge
+                             , asyncRefreshInfoResult = either Left (Right . refreshResult) tryA }
+              combine newInfo oldInfo =
+                newInfo { asyncRefreshInfoAge = asyncRefreshInfoAge newInfo
+                                                <|> asyncRefreshInfoAge oldInfo }
+          atomically $ modifyTVar infoMapTVar (Map.insertWith combine key thisInfo)
+          either throw return tryA
+
+-- | Scale the given duration according to the factor specified in the
+-- configuration.
+computeRefreshTime :: AsyncRefreshConf m k s a b
+                   -> Int
+                   -> Int
 computeRefreshTime conf duration =
   floor $ (asyncRefreshFactor conf) * fromIntegral duration

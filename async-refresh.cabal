@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.1.2
+version:             0.1.3
 -- synopsis:
 -- description:
 homepage:            https://github.com/mtesseract/async-refresh
@@ -17,6 +17,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     Control.Concurrent.Async.Refresh
   other-modules:       Control.Concurrent.Async.Refresh.Util
+                     , Control.Concurrent.Async.Refresh.Types
+                     , Control.Concurrent.Async.Refresh.Lenses
   build-depends:       base >= 4.7 && < 5
   default-language:    Haskell2010
   ghc-options:         -Wall -fno-warn-type-defaults
@@ -34,6 +36,7 @@ library
                      , safe-exceptions
                      , retry
                      , formatting
+                     , either
 
 test-suite async-refresh-test
   type:                exitcode-stdio-1.0
