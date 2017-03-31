@@ -1,22 +1,19 @@
 module Control.Concurrent.Async.Refresh.Types where
 
 import           ClassyPrelude
-import           Control.Retry
 
 type AsyncRefreshCallback m s a = s -> Either SomeException (RefreshResult a) -> m ()
 
 data AsyncRefreshRequest m k s a =
-  AsyncRefreshRequest { asyncRefreshRequestKey      :: k
-                      , asyncRefreshRequestSpec     :: s
-                      , asyncRefreshRequestCallback :: AsyncRefreshCallback m s a }
+  AsyncRefreshRequest { _asyncRefreshRequestKey      :: k
+                      , _asyncRefreshRequestSpec     :: s
+                      , _asyncRefreshRequestCallback :: AsyncRefreshCallback m s a }
 
-data AsyncRefreshConf m k s a b =
-  AsyncRefreshConf { asyncRefreshDefaultInterval :: Int -- Milliseconds
-                   , asyncRefreshActionInit      :: m b
-                   , asyncRefreshAction          :: b -> s -> m (RefreshResult a)
-                   , asyncRefreshRequests        :: [ AsyncRefreshRequest m k s a ]
-                   , asyncRefreshRetryPolicy     :: RetryPolicyM m
-                   , asyncRefreshFactor          :: Double
+data AsyncRefreshConf m k s a =
+  AsyncRefreshConf { _asyncRefreshConfDefaultInterval :: Int -- Milliseconds
+                   , _asyncRefreshConfAction          :: s -> m (RefreshResult a)
+                   , _asyncRefreshConfRequests        :: [ AsyncRefreshRequest m k s a ]
+                   , _asyncRefreshConfFactor          :: Double
                    }
 
 data AsyncRefreshInfo a =
