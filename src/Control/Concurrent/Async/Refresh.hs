@@ -12,7 +12,7 @@ module Control.Concurrent.Async.Refresh
   , RefreshResult(..)
   , defaultAsyncRefreshInterval
   , newAsyncRefreshConf
-  , asyncRefreshConfSetInterval
+  , asyncRefreshConfSetDefaultInterval
   , asyncRefreshConfSetLabel
   , asyncRefreshConfSetFactor
   , asyncRefreshConfSetCallback
@@ -29,22 +29,8 @@ import           Control.Lens
 import           Control.Monad.Logger
 import           Formatting
 
--- | Default refresh interval in Milliseconds.
-defaultAsyncRefreshInterval :: Int
-defaultAsyncRefreshInterval = 60 * 10^3
-
-defaultAsyncRefreshFactor :: Double
-defaultAsyncRefreshFactor = 0.8
-
-defaultAsyncRefreshCallback :: Monad m => Either SomeException (RefreshResult a) -> m ()
-defaultAsyncRefreshCallback _ = return ()
-
-defaultAsyncRefreshLabel :: Maybe Text
-defaultAsyncRefreshLabel = Nothing
-
-newAsyncRefreshConf :: MonadIO m
-                    => m (RefreshResult a)
-                    -> AsyncRefreshConf m a
+-- | Given a refresh action, create a new configuration.
+newAsyncRefreshConf :: MonadIO m => m (RefreshResult a) -> AsyncRefreshConf m a
 newAsyncRefreshConf action =
   AsyncRefreshConf { _asyncRefreshConfDefaultInterval = defaultAsyncRefreshInterval
                    , _asyncRefreshConfAction          = action
@@ -52,31 +38,56 @@ newAsyncRefreshConf action =
                    , _asyncRefreshConfLabel           = defaultAsyncRefreshLabel
                    , _asyncRefreshConfFactor          = defaultAsyncRefreshFactor }
 
-asyncRefreshConfSetInterval :: Int
-                            -> AsyncRefreshConf m a
-                            -> AsyncRefreshConf m a
-asyncRefreshConfSetInterval = (Lens.defaultInterval .~)
+-- | Default refresh interval is one minute (in milliseconds).
+defaultAsyncRefreshInterval :: Int
+defaultAsyncRefreshInterval = 60 * 10^3
 
+-- | Default refresh factor. See documentation for 'asyncRefreshConfSetFactor'.
+defaultAsyncRefreshFactor :: Double
+defaultAsyncRefreshFactor = 0.8
+
+-- | The default refresh callback is a no-op.
+defaultAsyncRefreshCallback :: Monad m => Either SomeException (RefreshResult a) -> m ()
+defaultAsyncRefreshCallback _ = return ()
+
+-- | The default label for configuration is 'Nothing'.
+defaultAsyncRefreshLabel :: Maybe Text
+defaultAsyncRefreshLabel = Nothing
+
+-- | Set default refresh interval, specified in milliseconds, in the
+-- given configuration. If a refresh action fails or does not produce
+-- an expiry time, this interval will be used.
+asyncRefreshConfSetDefaultInterval :: Int
+                                   -> AsyncRefreshConf m a
+                                   -> AsyncRefreshConf m a
+asyncRefreshConfSetDefaultInterval = (Lens.defaultInterval .~)
+
+-- | Set the label in the provided configuration. This is a human
+-- readable text, used for logging purposes.
 asyncRefreshConfSetLabel :: Text
                          -> AsyncRefreshConf m a
                          -> AsyncRefreshConf m a
 asyncRefreshConfSetLabel label = Lens.label .~ Just label
 
+-- | Extract a human readable label from the provided configuration.
+asyncRefreshConfGetLabel :: AsyncRefreshConf m a -> Text
+asyncRefreshConfGetLabel conf = fromMaybe "Nothing" (conf ^. Lens.label)
+
+-- | Set the refresh factor. When a refresh gives an explicit expiry
+-- time after a succesful refresh run, then this expiry time will be
+-- multiplied by this factor, yielding the effective expiry time after
+-- which a new refresh run will be scheduled.
 asyncRefreshConfSetFactor :: Double
                           -> AsyncRefreshConf m a
                           -> AsyncRefreshConf m a
 asyncRefreshConfSetFactor factor = Lens.factor .~ restrictToInterval 0 1 factor
 
+-- | Set a refresh callback for the provided configuration. This
+-- callback will be called after a refresh run.
 asyncRefreshConfSetCallback :: AsyncRefreshCallback m a
                             -> AsyncRefreshConf m a
                             -> AsyncRefreshConf m a
 asyncRefreshConfSetCallback = (Lens.callback .~)
-
-restrictToInterval :: Double -> Double -> Double -> Double
-restrictToInterval lowerBound upperBound x
-  | x < lowerBound = lowerBound
-  | x > upperBound = upperBound
-  | otherwise      = x
 
 -- | Start a new thread taking care of refreshing of data according to
 -- the given configuration.
@@ -88,13 +99,11 @@ newAsyncRefresh :: ( MonadIO m
                    , Forall (Pure m) )
                 => AsyncRefreshConf m a
                 -> m AsyncRefresh
-newAsyncRefresh conf = do
-  -- FIXME, applicative
-  asyncRefresh <- async (asyncRefreshCtrlThread conf)
-  return AsyncRefresh { asyncRefreshAsync       = asyncRefresh }
+newAsyncRefresh conf = AsyncRefresh <$> async (asyncRefreshCtrlThread conf)
 
--- | Main function of the refresh thread, taking care of periodic
--- refreshing.
+-- | Main function of the refresh control thread. Acts as a simple
+-- watchdog for the thread defined by 'asyncRefreshThread' doing the
+-- actual work.
 asyncRefreshCtrlThread :: ( MonadIO m
                           , MonadBaseControl IO m
                           , MonadCatch m
@@ -104,20 +113,16 @@ asyncRefreshCtrlThread :: ( MonadIO m
                        => AsyncRefreshConf m a
                        -> m ()
 asyncRefreshCtrlThread conf = do
-  withAsync (asyncRefreshThread conf) $ \asyncHandle ->
-    wait asyncHandle
+  withAsync (asyncRefreshThread conf) $ \asyncHandle -> wait asyncHandle
   logErrorN "Unexpected termination of async refresh thread"
 
-asyncRefreshConfGetLabel :: AsyncRefreshConf m a -> Text
-asyncRefreshConfGetLabel conf = fromMaybe "Nothing" (conf ^. Lens.label)
-
+-- | Main function for the thread implementing the refreshing logic.
 asyncRefreshThread :: ( MonadIO m
                       , MonadBaseControl IO m
                       , MonadCatch m
                       , MonadLogger m
                       , Forall (Pure m) )
-                   => AsyncRefreshConf m a
-                   -> m ()
+                   => AsyncRefreshConf m a -> m ()
 asyncRefreshThread conf = forever $
   tryAny (asyncRefreshDo conf) >>= \case
     Right res -> do
@@ -132,13 +137,13 @@ asyncRefreshThread conf = forever $
                 (asyncRefreshConfGetLabel conf) (tshow exn)
       threadDelay (conf ^. Lens.defaultInterval * 10^3)
 
+-- | This function does the actual refreshing work.
 asyncRefreshDo :: ( MonadIO m
                   , MonadBaseControl IO m
                   , MonadCatch m
                   , MonadLogger m
                   , Forall (Pure m) )
-               => AsyncRefreshConf m a
-               -> m (RefreshResult a)
+               => AsyncRefreshConf m a -> m (RefreshResult a)
 asyncRefreshDo conf = do
   tryA <- tryAny (conf ^. Lens.action)
     `logOnError` sformat ("Failed to execute refresh action for token request '"

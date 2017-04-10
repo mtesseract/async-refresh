@@ -2,20 +2,25 @@ module Control.Concurrent.Async.Refresh.Types where
 
 import           ClassyPrelude
 
+-- | Type synonym for async refresh callbacks.
 type AsyncRefreshCallback m a = Either SomeException (RefreshResult a) -> m ()
 
+-- | Data type defining an async refresh configuration.
 data AsyncRefreshConf m a =
-  AsyncRefreshConf { _asyncRefreshConfDefaultInterval :: Int -- Milliseconds
-                   , _asyncRefreshConfAction          :: m (RefreshResult a)
-                   , _asyncRefreshConfFactor          :: Double
-                   , _asyncRefreshConfCallback        :: AsyncRefreshCallback m a
-                   , _asyncRefreshConfLabel           :: Maybe Text }
+  AsyncRefreshConf
+  { _asyncRefreshConfDefaultInterval :: Int                      -- ^ In milliseconds.
+  , _asyncRefreshConfAction          :: m (RefreshResult a)      -- ^ Action implementing the refreshing.
+  , _asyncRefreshConfFactor          :: Double                   -- ^ Refresh factor.
+  , _asyncRefreshConfCallback        :: AsyncRefreshCallback m a -- ^ To be called after refreshing.
+  , _asyncRefreshConfLabel           :: Maybe Text               -- ^ Human readable label.
+  }
 
+-- | Data type denoting a running async refresher.
 data AsyncRefresh =
   AsyncRefresh { asyncRefreshAsync       :: Async () }
 
+-- | Data type returned by async refresh actions.
 data RefreshResult a =
-  RefreshResult { refreshResult  :: a
-                , refreshTryNext :: Maybe Int -- Milliseconds
+  RefreshResult { refreshResult  :: a         -- ^ Actual result.
+                , refreshTryNext :: Maybe Int -- ^ In milliseconds.
                 } deriving (Show)
-
