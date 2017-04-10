@@ -1,6 +1,6 @@
 name:                async-refresh
 version:             0.1.6
--- synopsis:
+synopsis:            Package implementing core logic for periodic refreshing of data.
 -- description:
 homepage:            https://github.com/mtesseract/async-refresh
 license:             BSD3

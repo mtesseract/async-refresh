@@ -1,5 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-|
+Module      : Control.Concurrent.Async.Refresh.Util
+Description : This module contains utility functions used within the async-refresh package.
+Copyright   : (c) Moritz Schulte, 2017
+License     : BSD3
+Maintainer  : mtesseract@silverratio.net
+Stability   : experimental
+Portability : POSIX
+-}
+
 module Control.Concurrent.Async.Refresh.Util where
 
 import           ClassyPrelude

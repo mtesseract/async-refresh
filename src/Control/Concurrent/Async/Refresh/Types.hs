@@ -1,3 +1,13 @@
+{-|
+Module      : Control.Concurrent.Async.Refresh.Types
+Description : This module contains the type definitions for the async-refresh package.
+Copyright   : (c) Moritz Schulte, 2017
+License     : BSD3
+Maintainer  : mtesseract@silverratio.net
+Stability   : experimental
+Portability : POSIX
+-}
+
 module Control.Concurrent.Async.Refresh.Types where
 
 import           ClassyPrelude

@@ -5,6 +5,20 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TupleSections         #-}
 
+{-|
+Module      : Control.Concurrent.Async.Refresh
+Description : This module exposes the API of the async-refresh package.
+Copyright   : (c) Moritz Schulte, 2017
+License     : BSD3
+Maintainer  : mtesseract@silverratio.net
+Stability   : experimental
+Portability : POSIX
+
+The async-refresh package provides the logic for periodic refreshing
+of arbitrary data. This module implements the core of the package and
+exposes its API.
+-}
+
 module Control.Concurrent.Async.Refresh
   ( AsyncRefreshConf
   , AsyncRefresh
