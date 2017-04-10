@@ -1,14 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
-import ClassyPrelude
-import Data.Function ((&))
-import Test.Framework (Test, defaultMain, testGroup)
-import Test.Framework.Providers.HUnit (testCase)
-import Test.HUnit ((@?=))
-import Control.Concurrent.Async.Refresh
-import Control.Monad.Logger
+import           ClassyPrelude
+import           Control.Concurrent.Async.Refresh
+import           Control.Monad.Logger
+import           Data.Function                    ((&))
+import           Test.Framework                   (Test, defaultMain, testGroup)
+import           Test.Framework.Providers.HUnit   (testCase)
+import           Test.HUnit                       ((@?=))
 
 main :: IO ()
 main = do
@@ -19,38 +20,24 @@ tests :: [Test.Framework.Test]
 tests =
   [ testGroup "Test Suite" [ testCase "Simple one-time refreshing" oneTimeRefresh ] ]
 
-newtype TokenName = TokenName Text deriving (Show, Eq, Ord)
-newtype TokenSpec = TokenSpec Text deriving (Show, Eq, Ord)
-newtype Token = Token ByteString deriving (Show, Eq)
+data Exn = NotFound deriving (Show, Typeable)
 
-refresher :: MonadIO m => TokenSpec -> m (RefreshResult Token)
-refresher (TokenSpec spec) = do
-  return $ RefreshResult
-    { refreshResult = Token (encodeUtf8 ("init-" ++ spec))
-    , refreshTryNext = Just (60 * 10^3) }
+instance Exception Exn
 
-mkConf :: MonadIO m
-       => TVar (Either SomeException Token) -> AsyncRefreshConf m TokenName TokenSpec Token
-mkConf tokenStore =
-  newAsyncRefreshConf refresher
-    & asyncRefreshConfSetInterval 1 -- Once per second
-    & asyncRefreshConfAddRequest (TokenName "foo")
-                                 (TokenSpec "dummy")
-                                 (Just callbackStore)
-
-  where callbackStore _ res = atomically $
-          writeTVar tokenStore (refreshResult <$> res)
+callbackTVarStore :: MonadIO m =>
+                     TVar (Either SomeException a)
+                  -> Either SomeException (RefreshResult a)
+                  -> m ()
+callbackTVarStore store res = liftIO . atomically $ writeTVar store (refreshResult <$> res)
 
 oneTimeRefresh :: IO ()
 oneTimeRefresh = runStderrLoggingT $ do
-  return ()
-  tokenStore <- liftIO $ newTVarIO (Left undefined)
-  let conf = mkConf tokenStore
+  store :: TVar (Either SomeException Text) <- liftIO $ newTVarIO (Left (toException NotFound))
+  let conf = newAsyncRefreshConf (return (RefreshResult "foo" Nothing))
+             & asyncRefreshConfSetLabel "Foo"
+             & asyncRefreshConfSetCallback (callbackTVarStore store)
   asyncRefresh <- newAsyncRefresh conf
   threadDelay (10 ^ 6 + 10 ^ 5)
-  (Right token) <- atomically $ readTVar tokenStore
-  liftIO $ token @?= Token "init-dummy"
-  (Just info) <- asyncRefreshInfo asyncRefresh (TokenName "foo")
-  (Right res) <- return $ asyncRefreshInfoResult info
-  liftIO $ res @?= Token "init-dummy"
-  return ()
+  storeContent <- atomically $ readTVar store
+  (Right storeContentRight) <- return storeContent
+  liftIO $ storeContentRight @?= "foo"

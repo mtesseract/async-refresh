@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.1.4
+version:             0.1.5
 -- synopsis:
 -- description:
 homepage:            https://github.com/mtesseract/async-refresh
@@ -30,7 +30,6 @@ library
   build-depends:       base >= 4.7 && < 5
                      , classy-prelude
                      , lens
-                     , containers
                      , monad-logger
                      , lifted-async
                      , stm
@@ -47,7 +46,6 @@ test-suite async-refresh-test
                      , HUnit
                      , test-framework
                      , test-framework-hunit
-                     , containers
                      , criterion
                      , monad-logger
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N

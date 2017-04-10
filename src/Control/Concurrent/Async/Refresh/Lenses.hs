@@ -9,5 +9,4 @@ module Control.Concurrent.Async.Refresh.Lenses where
 import           Control.Concurrent.Async.Refresh.Types
 import           Control.Lens
 
-makeFields ''AsyncRefreshRequest
 makeFields ''AsyncRefreshConf
