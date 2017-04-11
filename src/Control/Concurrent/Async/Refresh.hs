@@ -138,7 +138,7 @@ asyncRefreshThread :: ( MonadIO m
 asyncRefreshThread conf = forever $
   tryAny (asyncRefreshDo conf) >>= \case
     Right res -> do
-      let delay = fromMaybe (conf ^. Lens.defaultInterval) (refreshTryNext res)
+      let delay = fromMaybe (conf ^. Lens.defaultInterval) (refreshExpiry res)
       logDebugN $
         sformat ("Refreshing done for refreshing request '" % stext % "'")
                 (asyncRefreshConfGetLabel conf)

@@ -31,6 +31,6 @@ data AsyncRefresh =
 
 -- | Data type returned by async refresh actions.
 data RefreshResult a =
-  RefreshResult { refreshResult  :: a         -- ^ Actual result.
-                , refreshTryNext :: Maybe Int -- ^ In milliseconds.
+  RefreshResult { refreshResult :: a         -- ^ Actual result.
+                , refreshExpiry :: Maybe Int -- ^ In milliseconds.
                 } deriving (Show)

@@ -4,8 +4,6 @@
 {-# LANGUAGE TemplateHaskell        #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
 
-module Control.Concurrent.Async.Refresh.Lenses where
-
 {-|
 Module      : Control.Concurrent.Async.Refresh.Lenses
 Description : This module defines lenses used within the async-refresh package.
@@ -15,6 +13,8 @@ Maintainer  : mtesseract@silverratio.net
 Stability   : experimental
 Portability : POSIX
 -}
+
+module Control.Concurrent.Async.Refresh.Lenses where
 
 import           Control.Concurrent.Async.Refresh.Types
 import           Control.Lens

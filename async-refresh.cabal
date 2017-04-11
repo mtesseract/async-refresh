@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.1.7
+version:             0.2.0
 synopsis:            Package implementing core logic for refreshing of expiring data.
 description:         This package can be used for refreshing of expiring data according
                      to a user-provided action. Using callbacks, the user can decide
