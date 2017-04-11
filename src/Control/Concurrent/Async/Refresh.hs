@@ -34,14 +34,12 @@ module Control.Concurrent.Async.Refresh
   , asyncRefreshAsync
   ) where
 
-import           ClassyPrelude
+import           Control.Concurrent.Async.Refresh.Prelude
 import           Control.Concurrent.Async.Lifted.Safe    (wait)
 import qualified Control.Concurrent.Async.Refresh.Lenses as Lens
 import           Control.Concurrent.Async.Refresh.Types
 import           Control.Concurrent.Async.Refresh.Util
 import           Control.Lens
-import           Control.Monad.Logger
-import           Formatting
 
 -- | Given a refresh action, create a new configuration.
 newAsyncRefreshConf :: MonadIO m => m (RefreshResult a) -> AsyncRefreshConf m a

@@ -3,10 +3,15 @@
 
 module Main where
 
-import           ClassyPrelude
+import           Control.Concurrent
 import           Control.Concurrent.Async.Refresh
+import           Control.Concurrent.STM
+import           Control.Exception
+import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Data.Function                    ((&))
+import           Data.Text                        (Text)
+import           Data.Typeable
 import           Test.Framework                   (Test, defaultMain, testGroup)
 import           Test.Framework.Providers.HUnit   (testCase)
 import           Test.HUnit                       ((@?=))
@@ -37,7 +42,7 @@ oneTimeRefresh = runStderrLoggingT $ do
              & asyncRefreshConfSetLabel "Foo"
              & asyncRefreshConfSetCallback (callbackTVarStore store)
   asyncRefresh <- newAsyncRefresh conf
-  threadDelay (10 ^ 6 + 10 ^ 5)
-  storeContent <- atomically $ readTVar store
+  liftIO $ threadDelay (10 ^ 6 + 10 ^ 5)
+  storeContent <- liftIO $ atomically $ readTVar store
   (Right storeContentRight) <- return storeContent
   liftIO $ storeContentRight @?= "foo"

@@ -10,7 +10,7 @@ Portability : POSIX
 
 module Control.Concurrent.Async.Refresh.Types where
 
-import           ClassyPrelude
+import           Control.Concurrent.Async.Refresh.Prelude
 
 -- | Type synonym for async refresh callbacks.
 type AsyncRefreshCallback m a = Either SomeException (RefreshResult a) -> m ()

@@ -12,9 +12,7 @@ Portability : POSIX
 
 module Control.Concurrent.Async.Refresh.Util where
 
-import           ClassyPrelude
-import           Control.Monad.Logger
-import           Formatting
+import           Control.Concurrent.Async.Refresh.Prelude
 
 -- | Helper function, which evaluates the given action, logging an
 -- error in case of exceptions (and rethrowing the exception).
