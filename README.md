@@ -1,7 +1,7 @@
-# async-refresh
-
 About
 =====
+
+[![Build Status](https://travis-ci.org/mtesseract/async-refresh.svg?branch=master)](https://travis-ci.org/mtesseract/async-refresh)
 
 This is Haskell library implementing the logic for refreshing of
 expiring data according to user-provided actions.
