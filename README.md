@@ -1,7 +1,7 @@
+# async-refresh [![Hackage version](https://img.shields.io/hackage/v/async-refresh.svg?label=Hackage)](https://hackage.haskell.org/package/async-refresh) [![Stackage version](https://www.stackage.org/package/async-refresh/badge/lts?label=Stackage)](https://www.stackage.org/package/async-refresh) [![Build Status](https://travis-ci.org/mtesseract/async-refresh.svg?branch=master)](https://travis-ci.org/mtesseract/async-refresh)
+
 About
 =====
-
-[![Build Status](https://travis-ci.org/mtesseract/async-refresh.svg?branch=master)](https://travis-ci.org/mtesseract/async-refresh)
 
 This is Haskell library implementing the logic for refreshing of
 expiring data according to user-provided actions.
