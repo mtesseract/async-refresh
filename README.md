@@ -1,13 +1,11 @@
-# async-refresh
+# async-refresh [![Hackage version](https://img.shields.io/hackage/v/async-refresh.svg?label=Hackage)](https://hackage.haskell.org/package/async-refresh) [![Stackage version](https://www.stackage.org/package/async-refresh/badge/lts?label=Stackage)](https://www.stackage.org/package/async-refresh) [![Build Status](https://travis-ci.org/mtesseract/async-refresh.svg?branch=master)](https://travis-ci.org/mtesseract/async-refresh)
 
-About
-=====
+### About
 
 This is Haskell library implementing the logic for refreshing of
 expiring data according to user-provided actions.
 
-Usage
-=====
+### Usage
 
 - Create a new configuration using `newAsyncRefreshConf`, providing
   the action to be used for data refreshing.
@@ -18,8 +16,7 @@ Usage
 - Use `newAsyncRefresh` to initiate a new thread managing the
   asynchronous refreshing.
 
-Example
-=======
+### Example
 
 The following IO action produces a `TVar` which is updated every ten
 seconds to contain the current time (wrapped in an `Either
