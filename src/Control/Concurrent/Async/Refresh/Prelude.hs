@@ -37,7 +37,7 @@ import qualified Data.Text
 import           Formatting
 import           Prelude                              hiding (head, tail,
                                                        undefined)
-import qualified Prelude                              as Prelude
+import qualified Prelude
 
 -- | Version of 'undefined' with a deprecated pragma.
 undefined :: a

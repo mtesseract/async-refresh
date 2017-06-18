@@ -17,6 +17,6 @@ Portability : POSIX
 module Control.Concurrent.Async.Refresh.Lenses where
 
 import           Control.Concurrent.Async.Refresh.Types
-import           Control.Lens
+import           Lens.Micro.TH
 
 makeFields ''AsyncRefreshConf
