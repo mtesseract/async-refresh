@@ -26,7 +26,7 @@ data AsyncRefreshConf m a =
   }
 
 -- | Data type denoting a running async refresher.
-data AsyncRefresh =
+newtype AsyncRefresh =
   AsyncRefresh { asyncRefreshAsync       :: Async () }
 
 -- | Data type returned by async refresh actions.

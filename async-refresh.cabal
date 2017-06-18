@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.2.0.1
+version:             0.2.0.2
 synopsis:            Package implementing core logic for refreshing of expiring data.
 description:         This package can be used for refreshing of expiring data according
                      to a user-provided action. Using callbacks, the user can decide
@@ -32,7 +32,8 @@ library
                      , MultiParamTypeClasses
   build-depends:       base >= 4.7 && < 5
                      , text
-                     , lens
+                     , microlens
+                     , microlens-th
                      , monad-logger
                      , lifted-async
                      , stm
