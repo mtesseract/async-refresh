@@ -8,7 +8,7 @@
 {-|
 Module      : Control.Concurrent.Async.Refresh
 Description : This module exposes the API of the async-refresh package.
-Copyright   : (c) Moritz Schulte, 2017
+Copyright   : (c) Moritz Clasmeier, 2017-2018
 License     : BSD3
 Maintainer  : mtesseract@silverratio.net
 Stability   : experimental
@@ -34,11 +34,11 @@ module Control.Concurrent.Async.Refresh
   , asyncRefreshAsync
   ) where
 
-import           Control.Concurrent.Async.Lifted.Safe     (wait)
 import qualified Control.Concurrent.Async.Refresh.Lenses  as Lens
 import           Control.Concurrent.Async.Refresh.Prelude
 import           Control.Concurrent.Async.Refresh.Types
 import           Control.Concurrent.Async.Refresh.Util
+import           Control.Monad.IO.Unlift
 import           Lens.Micro
 
 -- | Given a refresh action, create a new configuration.
@@ -103,12 +103,10 @@ asyncRefreshConfSetCallback = (Lens.callback .~)
 
 -- | Start a new thread taking care of refreshing of data according to
 -- the given configuration.
-newAsyncRefresh :: ( MonadIO m
-                   , MonadBaseControl IO m
+newAsyncRefresh :: ( MonadUnliftIO m
                    , MonadCatch m
                    , MonadMask m
-                   , MonadLogger m
-                   , Forall (Pure m) )
+                   , MonadLogger m )
                 => AsyncRefreshConf m a
                 -> m AsyncRefresh
 newAsyncRefresh conf = AsyncRefresh <$> async (asyncRefreshCtrlThread conf)
@@ -116,12 +114,10 @@ newAsyncRefresh conf = AsyncRefresh <$> async (asyncRefreshCtrlThread conf)
 -- | Main function of the refresh control thread. Acts as a simple
 -- watchdog for the thread defined by 'asyncRefreshThread' doing the
 -- actual work.
-asyncRefreshCtrlThread :: ( MonadIO m
-                          , MonadBaseControl IO m
+asyncRefreshCtrlThread :: ( MonadUnliftIO m
                           , MonadCatch m
                           , MonadMask m
-                          , MonadLogger m
-                          , Forall (Pure m) )
+                          , MonadLogger m )
                        => AsyncRefreshConf m a
                        -> m ()
 asyncRefreshCtrlThread conf = do
@@ -129,11 +125,9 @@ asyncRefreshCtrlThread conf = do
   logErrorN "Unexpected termination of async refresh thread"
 
 -- | Main function for the thread implementing the refreshing logic.
-asyncRefreshThread :: ( MonadIO m
-                      , MonadBaseControl IO m
+asyncRefreshThread :: ( MonadUnliftIO m
                       , MonadCatch m
-                      , MonadLogger m
-                      , Forall (Pure m) )
+                      , MonadLogger m )
                    => AsyncRefreshConf m a -> m ()
 asyncRefreshThread conf = forever $
   tryAny (asyncRefreshDo conf) >>= \case
@@ -150,11 +144,9 @@ asyncRefreshThread conf = forever $
       threadDelay (conf ^. Lens.defaultInterval * 10^3)
 
 -- | This function does the actual refreshing work.
-asyncRefreshDo :: ( MonadIO m
-                  , MonadBaseControl IO m
+asyncRefreshDo :: ( MonadUnliftIO m
                   , MonadCatch m
-                  , MonadLogger m
-                  , Forall (Pure m) )
+                  , MonadLogger m )
                => AsyncRefreshConf m a -> m (RefreshResult a)
 asyncRefreshDo conf = do
   tryA <- tryAny (conf ^. Lens.action)

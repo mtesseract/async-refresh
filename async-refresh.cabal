@@ -1,5 +1,5 @@
 name:                async-refresh
-version:             0.2.0.2
+version:             0.3.0.0
 synopsis:            Package implementing core logic for refreshing of expiring data.
 description:         This package can be used for refreshing of expiring data according
                      to a user-provided action. Using callbacks, the user can decide
@@ -7,9 +7,9 @@ description:         This package can be used for refreshing of expiring data ac
 homepage:            https://github.com/mtesseract/async-refresh
 license:             BSD3
 license-file:        LICENSE
-author:              Moritz Schulte
+author:              Moritz Clasmeier
 maintainer:          mtesseract@silverratio.net
-copyright:           (c) 2017 Moritz Schulte
+copyright:           (c) 2017, 2018 Moritz Clasmeier
 category:            Control
 build-type:          Simple
 extra-source-files:  README.md
@@ -39,7 +39,8 @@ library
                      , stm
                      , safe-exceptions
                      , formatting
-                     , monad-control
+                     , unliftio
+                     , unliftio-core
 
 test-suite async-refresh-test
   type:                exitcode-stdio-1.0
