@@ -13,31 +13,28 @@ module Control.Concurrent.Async.Refresh.Prelude
   , module Control.Exception.Safe
   , module Formatting
   , module Control.Monad.Logger
+  , module UnliftIO.Async
+  , threadDelay
   , Text
   , fromMaybe
-  , Async, Forall, Pure, withAsync, async
-  , threadDelay
   , forever, void
   , MonadIO
-  , MonadBaseControl
   , undefined
   , tshow
   ) where
 
-import qualified Control.Concurrent
-import           Control.Concurrent.Async.Lifted.Safe
 import           Control.Exception.Safe
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
-import           Control.Monad.Trans.Control
-import           Data.Maybe                           (fromMaybe)
-import           Data.Text                            (Text)
+import           Data.Maybe             (fromMaybe)
+import           Data.Text              (Text)
 import qualified Data.Text
 import           Formatting
-import           Prelude                              hiding (head, tail,
-                                                       undefined)
+import           Prelude                hiding (head, tail, undefined)
 import qualified Prelude
+import           UnliftIO.Async
+import           UnliftIO.Concurrent
 
 -- | Version of 'undefined' with a deprecated pragma.
 undefined :: a
@@ -48,7 +45,3 @@ undefined = Prelude.undefined
 -- 'String'.
 tshow :: Show a => a -> Text
 tshow = Data.Text.pack . show
-
--- | Generalization of 'Control.Concurrent.threadDelay'.
-threadDelay :: MonadIO m => Int -> m ()
-threadDelay = liftIO . Control.Concurrent.threadDelay
