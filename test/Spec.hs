@@ -41,7 +41,7 @@ oneTimeRefresh = runStderrLoggingT $ do
   let conf = newAsyncRefreshConf (return (RefreshResult "foo" Nothing))
              & asyncRefreshConfSetLabel "Foo"
              & asyncRefreshConfSetCallback (callbackTVarStore store)
-  asyncRefresh <- newAsyncRefresh conf
+  _asyncRefresh <- newAsyncRefresh conf
   liftIO $ threadDelay (10 ^ 6 + 10 ^ 5)
   storeContent <- liftIO $ atomically $ readTVar store
   (Right storeContentRight) <- return storeContent
