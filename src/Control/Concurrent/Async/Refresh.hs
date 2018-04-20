@@ -40,6 +40,10 @@ import           Control.Concurrent.Async.Refresh.Types
 import           Control.Concurrent.Async.Refresh.Util
 import           Control.Monad.IO.Unlift
 import           Lens.Micro
+import           Numeric.Units.Dimensional.Prelude        (Time, micro, minute,
+                                                           one, second, (*~),
+                                                           (/~))
+import qualified Numeric.Units.Dimensional.Prelude        as Dimensional
 
 -- | Given a refresh action, create a new configuration.
 newAsyncRefreshConf :: MonadIO m => m (RefreshResult a) -> AsyncRefreshConf m a
@@ -50,9 +54,9 @@ newAsyncRefreshConf action =
                    , _asyncRefreshConfLabel           = defaultAsyncRefreshLabel
                    , _asyncRefreshConfFactor          = defaultAsyncRefreshFactor }
 
--- | Default refresh interval is one minute (in milliseconds).
-defaultAsyncRefreshInterval :: Int
-defaultAsyncRefreshInterval = 60 * 10^3
+-- | Default refresh interval is one minute.
+defaultAsyncRefreshInterval :: Time Double
+defaultAsyncRefreshInterval = 1 *~ minute
 
 -- | Default refresh factor. See documentation for 'asyncRefreshConfSetFactor'.
 defaultAsyncRefreshFactor :: Double
@@ -66,10 +70,10 @@ defaultAsyncRefreshCallback _ = return ()
 defaultAsyncRefreshLabel :: Maybe Text
 defaultAsyncRefreshLabel = Nothing
 
--- | Set default refresh interval, specified in milliseconds, in the
--- given configuration. If a refresh action fails or does not produce
--- an expiry time, this interval will be used.
-asyncRefreshConfSetDefaultInterval :: Int
+-- | Set default refresh interval in the given configuration. If a
+-- refresh action fails or does not produce an expiry time, this
+-- interval will be used.
+asyncRefreshConfSetDefaultInterval :: Time Double
                                    -> AsyncRefreshConf m a
                                    -> AsyncRefreshConf m a
 asyncRefreshConfSetDefaultInterval = (Lens.defaultInterval .~)
@@ -132,16 +136,16 @@ asyncRefreshThread :: ( MonadUnliftIO m
 asyncRefreshThread conf = forever $
   tryAny (asyncRefreshDo conf) >>= \case
     Right res -> do
-      let delay = fromMaybe (conf ^. Lens.defaultInterval) (refreshExpiry res)
+      let delay = fromMaybe (conf^.Lens.defaultInterval) (refreshExpiry res)
       logDebugN $
         sformat ("Refreshing done for refreshing request '" % stext % "'")
                 (asyncRefreshConfGetLabel conf)
-      threadDelay (computeRefreshTime conf delay * 10^3)
+      threadDelay . round $ (computeRefreshTime conf delay) /~ micro second
     Left  exn -> do
       logErrorN $
         sformat ("Refresh action failed for token request '" % stext % "': " % stext)
                 (asyncRefreshConfGetLabel conf) (tshow exn)
-      threadDelay (conf ^. Lens.defaultInterval * 10^3)
+      threadDelay . round $ (conf^.Lens.defaultInterval) /~ micro second
 
 -- | This function does the actual refreshing work.
 asyncRefreshDo :: ( MonadUnliftIO m
@@ -158,6 +162,6 @@ asyncRefreshDo conf = do
 
 -- | Scale the given duration according to the factor specified in the
 -- configuration.
-computeRefreshTime :: AsyncRefreshConf m a -> Int -> Int
-computeRefreshTime conf duration =
-  floor $ (conf ^. Lens.factor) * fromIntegral duration
+computeRefreshTime :: AsyncRefreshConf m a -> Time Double -> Time Double
+computeRefreshTime conf duration = factor Dimensional.* duration
+  where factor = (conf^.Lens.factor) *~ one
