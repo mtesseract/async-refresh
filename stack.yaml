@@ -1,6 +1,4 @@
-resolver: lts-11.0
+resolver: lts-11.4
 packages:
 - '.'
-extra-deps: []
-flags: {}
-extra-package-dbs: []
+extra-deps: [katip-0.5.4.0, th-format-0.1.1.0]

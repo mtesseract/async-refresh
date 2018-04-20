@@ -12,7 +12,6 @@ module Control.Concurrent.Async.Refresh.Prelude
   ( module Prelude
   , module Control.Exception.Safe
   , module Formatting
-  , module Control.Monad.Logger
   , module UnliftIO.Async
   , threadDelay
   , Text
@@ -26,7 +25,6 @@ module Control.Concurrent.Async.Refresh.Prelude
 import           Control.Exception.Safe
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Control.Monad.Logger
 import           Data.Maybe             (fromMaybe)
 import           Data.Text              (Text)
 import qualified Data.Text

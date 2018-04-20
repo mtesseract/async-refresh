@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE TupleSections         #-}
 
 {-|
@@ -31,6 +32,7 @@ module Control.Concurrent.Async.Refresh
   , asyncRefreshConfSetFactor
   , asyncRefreshConfSetCallback
   , newAsyncRefresh
+  , releaseAsyncRefresh
   , asyncRefreshAsync
   ) where
 
@@ -39,6 +41,8 @@ import           Control.Concurrent.Async.Refresh.Prelude
 import           Control.Concurrent.Async.Refresh.Types
 import           Control.Concurrent.Async.Refresh.Util
 import           Control.Monad.IO.Unlift
+import           Data.Format
+import           Katip
 import           Lens.Micro
 import           Numeric.Units.Dimensional.Prelude        (Time, micro, minute,
                                                            one, second, (*~),
@@ -110,10 +114,16 @@ asyncRefreshConfSetCallback = (Lens.callback .~)
 newAsyncRefresh :: ( MonadUnliftIO m
                    , MonadCatch m
                    , MonadMask m
-                   , MonadLogger m )
+                   , KatipContext m )
                 => AsyncRefreshConf m a
                 -> m AsyncRefresh
 newAsyncRefresh conf = AsyncRefresh <$> async (asyncRefreshCtrlThread conf)
+
+releaseAsyncRefresh :: MonadIO m
+                    => AsyncRefresh
+                    -> m ()
+releaseAsyncRefresh =
+  cancel . asyncRefreshAsync
 
 -- | Main function of the refresh control thread. Acts as a simple
 -- watchdog for the thread defined by 'asyncRefreshThread' doing the
@@ -121,44 +131,41 @@ newAsyncRefresh conf = AsyncRefresh <$> async (asyncRefreshCtrlThread conf)
 asyncRefreshCtrlThread :: ( MonadUnliftIO m
                           , MonadCatch m
                           , MonadMask m
-                          , MonadLogger m )
+                          , KatipContext m )
                        => AsyncRefreshConf m a
                        -> m ()
 asyncRefreshCtrlThread conf = do
   withAsync (asyncRefreshThread conf) $ \asyncHandle -> wait asyncHandle
-  logErrorN "Unexpected termination of async refresh thread"
+  logFM ErrorS "Unexpected termination of async refresh thread"
 
 -- | Main function for the thread implementing the refreshing logic.
 asyncRefreshThread :: ( MonadUnliftIO m
                       , MonadCatch m
-                      , MonadLogger m )
+                      , KatipContext m )
                    => AsyncRefreshConf m a -> m ()
 asyncRefreshThread conf = forever $
   tryAny (asyncRefreshDo conf) >>= \case
     Right res -> do
       let delay = fromMaybe (conf^.Lens.defaultInterval) (refreshExpiry res)
-      logDebugN $
-        sformat ("Refreshing done for refreshing request '" % stext % "'")
-                (asyncRefreshConfGetLabel conf)
+      logFM DebugS (ls [fmt|Refreshing done for refreshing request '${label}'|])
       threadDelay . round $ (computeRefreshTime conf delay) /~ micro second
     Left  exn -> do
-      logErrorN $
-        sformat ("Refresh action failed for token request '" % stext % "': " % stext)
-                (asyncRefreshConfGetLabel conf) (tshow exn)
+      logFM ErrorS (ls [fmt|Refresh action failed for token request '${label}': $exn|])
       threadDelay . round $ (conf^.Lens.defaultInterval) /~ micro second
+
+  where label = asyncRefreshConfGetLabel conf
 
 -- | This function does the actual refreshing work.
 asyncRefreshDo :: ( MonadUnliftIO m
                   , MonadCatch m
-                  , MonadLogger m )
+                  , KatipContext m )
                => AsyncRefreshConf m a -> m (RefreshResult a)
 asyncRefreshDo conf = do
-  tryA <- tryAny (conf ^. Lens.action)
-    `logOnError` sformat ("Failed to execute refresh action for token request '"
-                          % stext % "'") (asyncRefreshConfGetLabel conf)
-  void $ tryAny ((conf ^. Lens.callback) tryA)
-    `logOnError` "User provided callback threw exception"
-  either throw return tryA
+  result <- tryAny $ conf^.Lens.action
+  (conf^.Lens.callback) result
+  case result of
+    Left exn  -> throwM exn
+    Right res -> pure res
 
 -- | Scale the given duration according to the factor specified in the
 -- configuration.
