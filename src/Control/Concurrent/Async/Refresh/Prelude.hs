@@ -1,7 +1,7 @@
 {-|
 Module      : Control.Concurrent.Async.Refresh.Prelude
 Description : Prelude for the async-refresh package.
-Copyright   : (c) Moritz Clasmeier, 2017
+Copyright   : (c) Moritz Clasmeier, 2017-2018
 License     : BSD3
 Maintainer  : mtesseract@silverratio.net
 Stability   : experimental
@@ -11,7 +11,6 @@ Portability : POSIX
 module Control.Concurrent.Async.Refresh.Prelude
   ( module Prelude
   , module Control.Exception.Safe
-  , module Formatting
   , module UnliftIO.Async
   , threadDelay
   , Text
@@ -28,7 +27,6 @@ import           Control.Monad.IO.Class
 import           Data.Maybe             (fromMaybe)
 import           Data.Text              (Text)
 import qualified Data.Text
-import           Formatting
 import           Prelude                hiding (head, tail, undefined)
 import qualified Prelude
 import           UnliftIO.Async

@@ -37,7 +37,6 @@ library
                      , lifted-async
                      , stm
                      , safe-exceptions
-                     , formatting
                      , unliftio
                      , unliftio-core
                      , dimensional
